@@ -52,3 +52,20 @@ int member_rwlock(int value) {
     pthread_rwlock_unlock(&list_rwlock);
     return 0;
 }
+
+void free_list_rwlock() {
+    pthread_rwlock_wrlock(&list_rwlock); // Acquire the write lock to prevent access by other threads
+
+    Node* curr = head;
+    Node* next;
+
+    while (curr != NULL) {
+        next = curr->next; // Save the next node
+        free(curr);        // Free the current node
+        curr = next;       // Move to the next node
+    }
+
+    head = NULL; // Reset the head pointer to indicate the list is now empty
+
+    pthread_rwlock_unlock(&list_rwlock); // Release the write lock
+}
