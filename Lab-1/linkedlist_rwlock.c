@@ -1,6 +1,7 @@
 #include "linkedlist.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <pthread.h>
 
 static Node* head = NULL;
 static pthread_rwlock_t list_rwlock;
@@ -10,9 +11,9 @@ void init_rwlock() {
 }
 
 void insert_rwlock(int value) {
-    pthread_rwlock_wrlock(&list_rwlock);
     Node* new_node = (Node*)malloc(sizeof(Node));
     new_node->data = value;
+    pthread_rwlock_wrlock(&list_rwlock);
     new_node->next = head;
     head = new_node;
     pthread_rwlock_unlock(&list_rwlock);
