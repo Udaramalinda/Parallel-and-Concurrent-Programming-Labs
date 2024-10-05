@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <pthread.h>
+
 static Node *head = NULL;
 static pthread_mutex_t list_mutex;
 

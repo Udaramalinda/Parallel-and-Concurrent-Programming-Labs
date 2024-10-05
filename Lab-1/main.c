@@ -4,54 +4,36 @@
 #include <pthread.h>
 #include <time.h>
 
-#define N 1000         // Initial size of the linked list
-#define M 10000        // Number of operations
-#define M_member 0.005 // Member operation probability
-#define M_insert 0.8   // Insert operation probability
-#define M_delete 0.195 // Delete operation probability
-#define THREAD_COUNT 2 // Number of threads to run concurrently
-#define SAMPLE_SIZE 50 // Number of times each experiment is run
+#define N 1000             // Initial size of the linked list
+#define M 10000            // Number of operations
+#define M_member 0.99      // Member operation probability
+#define M_insert 0.005     // Insert operation probability
+#define M_delete 0.005     // Delete operation probability
+#define PNC_THREAD_COUNT 3 // Number of threads to run concurrently
+#define SAMPLE_SIZE 40     // Number of times each experiment is run
 
 // TODO: prevent duplication of random numbers in the linked list at any given point of time
 
-// Example thread work function for mutex and read-write lock
+typedef struct
+{
+    int *operations;
+    int *values;        // Pre-generated random values
+    int ops_per_thread; // Number of operations per thread
+} thread_args_t;
+
+// Example thread work function for mutex
 void *thread_work_mutex(void *arg)
 {
-    // Calculate number of operations for each type
-    int member_ops = M * 0.99;  // 99% of the total operations
-    int insert_ops = M * 0.005; // 0.5% of the total operations
-    int delete_ops = M * 0.005; // 0.5% of the total operations
+    // Cast the argument to thread_args_t*
+    thread_args_t *args = (thread_args_t *)arg;
+    int *operations = args->operations;
+    int *values = args->values;
+    int ops_per_thread = args->ops_per_thread;
 
-    // Total operations for this thread
-    int ops_per_thread = M / THREAD_COUNT;
-
-    // Create an array to hold all operations (0 = member, 1 = insert, 2 = delete)
-    int *operations = malloc(ops_per_thread * sizeof(int));
-    int index = 0;
-
-    // Fill array with exact number of each operation
-    for (int i = 0; i < member_ops / THREAD_COUNT; i++)
-        operations[index++] = 0; // 0 represents member
-
-    for (int i = 0; i < insert_ops / THREAD_COUNT; i++)
-        operations[index++] = 1; // 1 represents insert
-
-    for (int i = 0; i < delete_ops / THREAD_COUNT; i++)
-        operations[index++] = 2; // 2 represents delete
-
-    // Shuffle the array to randomize the order of operations
+    // Perform the operations based on the pre-made operations array and random values array
     for (int i = 0; i < ops_per_thread; i++)
     {
-        int j = rand() % ops_per_thread;
-        int temp = operations[i];
-        operations[i] = operations[j];
-        operations[j] = temp;
-    }
-
-    // Perform the operations based on the shuffled array
-    for (int i = 0; i < ops_per_thread; i++)
-    {
-        int value = rand() % 65536; // Value between 0 and 2^16-1
+        int value = values[i]; // Use the pre-generated random value
 
         if (operations[i] == 0)
         {
@@ -67,48 +49,100 @@ void *thread_work_mutex(void *arg)
         }
     }
 
-    free(operations);
     return NULL;
 }
 
-// Example thread work function for read-write lock
-void *thread_work_rwlock(void *arg)
+// Function to run linked list operations with mutex
+double run_mutex_operations()
 {
+    init_mutex(); // Initialize mutex linked list
+    pthread_t threads[PNC_THREAD_COUNT];
+    thread_args_t thread_args[PNC_THREAD_COUNT];
+
+    int total_ops = M; // Total number of operations (M)
+    int ops_per_thread = total_ops / PNC_THREAD_COUNT;
+
+    // Create an array to hold all operations (0 = member, 1 = insert, 2 = delete)
+    int *operations = malloc(total_ops * sizeof(int));
+    int *values = malloc(total_ops * sizeof(int)); // Array to hold random values
+    int index = 0;
+
     // Calculate number of operations for each type
     int member_ops = M * 0.99;  // 99% of the total operations
     int insert_ops = M * 0.005; // 0.5% of the total operations
     int delete_ops = M * 0.005; // 0.5% of the total operations
 
-    // Total operations for this thread
-    int ops_per_thread = M / THREAD_COUNT;
-
-    // Create an array to hold all operations (0 = member, 1 = insert, 2 = delete)
-    int *operations = malloc(ops_per_thread * sizeof(int));
-    int index = 0;
-
     // Fill array with exact number of each operation
-    for (int i = 0; i < member_ops / THREAD_COUNT; i++)
+    for (int i = 0; i < member_ops; i++)
         operations[index++] = 0; // 0 represents member
 
-    for (int i = 0; i < insert_ops / THREAD_COUNT; i++)
+    for (int i = 0; i < insert_ops; i++)
         operations[index++] = 1; // 1 represents insert
 
-    for (int i = 0; i < delete_ops / THREAD_COUNT; i++)
+    for (int i = 0; i < delete_ops; i++)
         operations[index++] = 2; // 2 represents delete
 
     // Shuffle the array to randomize the order of operations
-    for (int i = 0; i < ops_per_thread; i++)
+    for (int i = 0; i < total_ops; i++)
     {
-        int j = rand() % ops_per_thread;
+        int j = rand() % total_ops;
         int temp = operations[i];
         operations[i] = operations[j];
         operations[j] = temp;
     }
 
-    // Perform the operations based on the shuffled array
-    for (int i = 0; i < ops_per_thread; i++)
+    // Pre-generate random values (values between 0 and 2^16-1)
+    for (int i = 0; i < total_ops; i++)
+    {
+        values[i] = rand() % 65536;
+    }
+
+    // Prepopulate the linked list with N elements
+    for (int i = 0; i < N; i++)
     {
         int value = rand() % 65536; // Value between 0 and 2^16-1
+        insert_mutex(value);        // Insert N elements into the linked list
+    }
+
+    clock_t start = clock();
+
+    // Create threads and pass a subset of operations and values to each
+    for (int i = 0; i < PNC_THREAD_COUNT; i++)
+    {
+        // Set the operations and operations per thread for each thread
+        thread_args[i].operations = operations + i * ops_per_thread;
+        thread_args[i].values = values + i * ops_per_thread; // Pass the random values
+        thread_args[i].ops_per_thread = ops_per_thread;
+
+        pthread_create(&threads[i], NULL, thread_work_mutex, (void *)&thread_args[i]);
+    }
+
+    // Join threads
+    for (int i = 0; i < PNC_THREAD_COUNT; i++)
+    {
+        pthread_join(threads[i], NULL);
+    }
+
+    clock_t end = clock();
+
+    free(operations);  // Free the operations array
+    free(values);      // Free the random values array
+    free_list_mutex(); // Free the linked list
+    return ((double)(end - start)) / CLOCKS_PER_SEC;
+}
+
+void *thread_work_rwlock(void *arg)
+{
+    // Cast the argument to thread_args_t*
+    thread_args_t *args = (thread_args_t *)arg;
+    int *operations = args->operations;
+    int *values = args->values;
+    int ops_per_thread = args->ops_per_thread;
+
+    // Perform the operations based on the pre-made operations array and random values array
+    for (int i = 0; i < ops_per_thread; i++)
+    {
+        int value = values[i]; // Use the pre-generated random value
 
         if (operations[i] == 0)
         {
@@ -124,46 +158,55 @@ void *thread_work_rwlock(void *arg)
         }
     }
 
-    free(operations);
     return NULL;
-}
-
-// Function to run linked list operations with mutex
-double run_mutex_operations()
-{
-    init_mutex(); // Initialize mutex linked list
-    pthread_t threads[THREAD_COUNT];
-
-    for (int i = 0; i < N; i++)
-    {
-        int value = rand() % 65536; // Value between 0 and 2^16-1
-        insert_mutex(value);        // Insert N elements into the linked list
-    }
-
-    clock_t start = clock();
-
-    for (int i = 0; i < THREAD_COUNT; i++)
-    {
-        pthread_create(&threads[i], NULL, thread_work_mutex, NULL);
-    }
-
-    for (int i = 0; i < THREAD_COUNT; i++)
-    {
-        pthread_join(threads[i], NULL);
-    }
-
-    clock_t end = clock();
-
-    free_list_mutex(); // Free the linked list
-    return ((double)(end - start)) / CLOCKS_PER_SEC;
 }
 
 // Function to run linked list operations with read-write locks
 double run_rwlock_operations()
 {
     init_rwlock(); // Initialize read-write lock linked list
-    pthread_t threads[THREAD_COUNT];
+    pthread_t threads[PNC_THREAD_COUNT];
+    thread_args_t thread_args[PNC_THREAD_COUNT];
 
+    int total_ops = M; // Total number of operations (M)
+    int ops_per_thread = total_ops / PNC_THREAD_COUNT;
+
+    // Create an array to hold all operations (0 = member, 1 = insert, 2 = delete)
+    int *operations = malloc(total_ops * sizeof(int));
+    int *values = malloc(total_ops * sizeof(int)); // Array to hold random values
+    int index = 0;
+
+    // Calculate number of operations for each type
+    int member_ops = M * 0.99;  // 99% of the total operations
+    int insert_ops = M * 0.005; // 0.5% of the total operations
+    int delete_ops = M * 0.005; // 0.5% of the total operations
+
+    // Fill array with exact number of each operation
+    for (int i = 0; i < member_ops; i++)
+        operations[index++] = 0; // 0 represents member
+
+    for (int i = 0; i < insert_ops; i++)
+        operations[index++] = 1; // 1 represents insert
+
+    for (int i = 0; i < delete_ops; i++)
+        operations[index++] = 2; // 2 represents delete
+
+    // Shuffle the array to randomize the order of operations
+    for (int i = 0; i < total_ops; i++)
+    {
+        int j = rand() % total_ops;
+        int temp = operations[i];
+        operations[i] = operations[j];
+        operations[j] = temp;
+    }
+
+    // Pre-generate random values (values between 0 and 2^16-1)
+    for (int i = 0; i < total_ops; i++)
+    {
+        values[i] = rand() % 65536;
+    }
+
+    // Prepopulate the linked list with N elements
     for (int i = 0; i < N; i++)
     {
         int value = rand() % 65536; // Value between 0 and 2^16-1
@@ -172,18 +215,27 @@ double run_rwlock_operations()
 
     clock_t start = clock();
 
-    for (int i = 0; i < THREAD_COUNT; i++)
+    // Create threads and pass a subset of operations and values to each
+    for (int i = 0; i < PNC_THREAD_COUNT; i++)
     {
-        pthread_create(&threads[i], NULL, thread_work_rwlock, NULL);
+        // Set the operations and operations per thread for each thread
+        thread_args[i].operations = operations + i * ops_per_thread;
+        thread_args[i].values = values + i * ops_per_thread; // Pass the random values
+        thread_args[i].ops_per_thread = ops_per_thread;
+
+        pthread_create(&threads[i], NULL, thread_work_rwlock, (void *)&thread_args[i]);
     }
 
-    for (int i = 0; i < THREAD_COUNT; i++)
+    // Join threads
+    for (int i = 0; i < PNC_THREAD_COUNT; i++)
     {
         pthread_join(threads[i], NULL);
     }
 
     clock_t end = clock();
 
+    free(operations);   // Free the operations array
+    free(values);       // Free the random values array
     free_list_rwlock(); // Free the linked list
     return ((double)(end - start)) / CLOCKS_PER_SEC;
 }
@@ -196,6 +248,8 @@ double run_serial_operations()
         int value = rand() % 65536; // Value between 0 and 2^16-1
         insert_serial(value);       // Insert N elements into the linked list
     }
+
+    clock_t start = clock();
 
     // Calculate number of operations for each type
     int member_ops = M * 0.99;  // 99% of the total operations
@@ -225,8 +279,6 @@ double run_serial_operations()
         operations[j] = temp;
     }
 
-    clock_t start = clock();
-    
     // Perform the operations based on the shuffled array
     for (int i = 0; i < M; i++)
     {
@@ -246,8 +298,8 @@ double run_serial_operations()
         }
     }
 
-    clock_t end = clock();
     free(operations); // Free the allocated memory
+    clock_t end = clock();
 
     free_list_serial(); // Free the linked list
     return ((double)(end - start)) / CLOCKS_PER_SEC;

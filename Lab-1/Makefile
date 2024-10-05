@@ -32,7 +32,7 @@
 
 # Compiler and flags
 CC = gcc
-CFLAGS = -Wall -pthread
+CFLAGS = -Wall -pthread -O3
 
 # Source and build directories
 SRCDIR = .
