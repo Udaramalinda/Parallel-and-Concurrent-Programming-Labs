@@ -3,14 +3,15 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <time.h>
+#include <stdbool.h>
 
-#define N 1000             // Initial size of the linked list
-#define M 10000            // Number of operations
-#define M_member 0.99      // Member operation probability
-#define M_insert 0.005     // Insert operation probability
-#define M_delete 0.005     // Delete operation probability
-#define PNC_THREAD_COUNT 3 // Number of threads to run concurrently
-#define SAMPLE_SIZE 40     // Number of times each experiment is run
+#define N 1000              // Initial size of the linked list
+#define M 10000             // Number of operations
+#define M_member 0.1        // Member operation probability
+#define M_insert 0.4        // Insert operation probability
+#define M_delete 0.5        // Delete operation probability
+#define PNC_THREAD_COUNT 16 // Number of threads to run concurrently
+#define SAMPLE_SIZE 40      // Number of times each experiment is run
 
 // TODO: prevent duplication of random numbers in the linked list at any given point of time
 
@@ -68,9 +69,9 @@ double run_mutex_operations()
     int index = 0;
 
     // Calculate number of operations for each type
-    int member_ops = M * 0.99;  // 99% of the total operations
-    int insert_ops = M * 0.005; // 0.5% of the total operations
-    int delete_ops = M * 0.005; // 0.5% of the total operations
+    int member_ops = M * M_member; // 99% of the total operations
+    int insert_ops = M * M_insert; // 0.5% of the total operations
+    int delete_ops = M * M_delete; // 0.5% of the total operations
 
     // Fill array with exact number of each operation
     for (int i = 0; i < member_ops; i++)
@@ -175,11 +176,12 @@ double run_rwlock_operations()
     int *operations = malloc(total_ops * sizeof(int));
     int *values = malloc(total_ops * sizeof(int)); // Array to hold random values
     int index = 0;
+    bool used[65536] = {false};
 
     // Calculate number of operations for each type
-    int member_ops = M * 0.99;  // 99% of the total operations
-    int insert_ops = M * 0.005; // 0.5% of the total operations
-    int delete_ops = M * 0.005; // 0.5% of the total operations
+    int member_ops = M * M_member; // 99% of the total operations
+    int insert_ops = M * M_insert; // 0.5% of the total operations
+    int delete_ops = M * M_delete; // 0.5% of the total operations
 
     // Fill array with exact number of each operation
     for (int i = 0; i < member_ops; i++)
@@ -203,7 +205,14 @@ double run_rwlock_operations()
     // Pre-generate random values (values between 0 and 2^16-1)
     for (int i = 0; i < total_ops; i++)
     {
-        values[i] = rand() % 65536;
+        // values[i] = rand() % 65536;
+        int value = rand() % 65536;
+        while (used[value])
+        {
+            value = rand() % 65536;
+        }
+        values[i] = value;
+        used[value] = true;
     }
 
     // Prepopulate the linked list with N elements
@@ -249,12 +258,10 @@ double run_serial_operations()
         insert_serial(value);       // Insert N elements into the linked list
     }
 
-    clock_t start = clock();
-
     // Calculate number of operations for each type
-    int member_ops = M * 0.99;  // 99% of the total operations
-    int insert_ops = M * 0.005; // 0.5% of the total operations
-    int delete_ops = M * 0.005; // 0.5% of the total operations
+    int member_ops = M * M_member; // 99% of the total operations
+    int insert_ops = M * M_insert; // 0.5% of the total operations
+    int delete_ops = M * M_delete; // 0.5% of the total operations
 
     // Create an array to hold all operations (0 = member, 1 = insert, 2 = delete)
     int *operations = malloc(M * sizeof(int));
@@ -279,6 +286,8 @@ double run_serial_operations()
         operations[j] = temp;
     }
 
+    clock_t start = clock();
+
     // Perform the operations based on the shuffled array
     for (int i = 0; i < M; i++)
     {
@@ -298,11 +307,27 @@ double run_serial_operations()
         }
     }
 
-    free(operations); // Free the allocated memory
     clock_t end = clock();
+
+    free(operations); // Free the allocated memory
 
     free_list_serial(); // Free the linked list
     return ((double)(end - start)) / CLOCKS_PER_SEC;
+}
+
+void generate_unique_values(int *values)
+{
+    bool used[65536] = {false};
+    for (int i = 0; i < M; i++)
+    {
+        int value = rand() % 65536;
+        while (used[value])
+        {
+            value = rand() % 65536;
+        }
+        values[i] = value;
+        used[value] = true;
+    }
 }
 
 int main(int argc, char *argv[])
@@ -313,6 +338,10 @@ int main(int argc, char *argv[])
     double total_mutex_time = 0.0;
     double total_rwlock_time = 0.0;
     double temp = 0.0;
+
+    // generate the unique values for operations
+    int values[M];
+    generate_unique_values(values);
 
     // Serial operations loop
     printf("Running Serial operations...\n");
