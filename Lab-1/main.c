@@ -10,10 +10,14 @@
 #define M_member 0.9        // Member operation probability
 #define M_insert 0.05        // Insert operation probability
 #define M_delete 0.05       // Delete operation probability
-#define PNC_THREAD_COUNT 16 // Number of threads to run concurrently
+#define PNC_THREAD_COUNT 4 // Number of threads to run concurrently
 #define SAMPLE_SIZE 40      // Number of times each experiment is run
 
 // TODO: prevent duplication of random numbers in the linked list at any given point of time
+
+// Function prototypes
+void generate_unique_values(int *values, int *initial_values);
+void generate_operation_order(int *operations);
 
 typedef struct
 {
