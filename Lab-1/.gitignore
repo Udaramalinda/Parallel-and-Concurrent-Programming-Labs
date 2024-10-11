@@ -2,6 +2,9 @@
 build/
 assembly/
 
+# Ignore image files
+img/
+
 # Ignore object files
 *.o
 
