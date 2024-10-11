@@ -4,20 +4,18 @@
 #include <pthread.h>
 #include <time.h>
 #include <stdbool.h>
+#include <math.h>
 
 #define N 1000              // Initial size of the linked list
 #define M 10000             // Number of operations
-#define M_member 0.9        // Member operation probability
-#define M_insert 0.05        // Insert operation probability
-#define M_delete 0.05       // Delete operation probability
-#define PNC_THREAD_COUNT 4 // Number of threads to run concurrently
 #define SAMPLE_SIZE 40      // Number of times each experiment is run
 
 // TODO: prevent duplication of random numbers in the linked list at any given point of time
 
 // Function prototypes
 void generate_unique_values(int *values, int *initial_values);
-void generate_operation_order(int *operations);
+void generate_operation_order(int *operations, double M_member, double M_insert, double M_delete);
+double calculate_standard_deviation(double times[], int sample_size, double mean);
 
 typedef struct
 {
@@ -61,7 +59,7 @@ void *thread_work_mutex(void *arg)
 }
 
 // Function to run linked list operations with mutex
-double run_mutex_operations()
+double run_mutex_operations(double M_member, double M_insert, double M_delete, int PNC_THREAD_COUNT)
 {
     init_mutex(); // Initialize mutex linked list
     pthread_t threads[PNC_THREAD_COUNT];
@@ -76,7 +74,7 @@ double run_mutex_operations()
     int *initial_values = malloc(N * sizeof(int)); // Array to hold initial values
 
     generate_unique_values(values, initial_values);
-    generate_operation_order(operations);
+    generate_operation_order(operations, M_member, M_insert, M_delete);
 
     // Prepopulate the linked list with N elements
     for (int i = 0; i < N; i++)
@@ -146,7 +144,7 @@ void *thread_work_rwlock(void *arg)
 }
 
 // Function to run linked list operations with read-write locks
-double run_rwlock_operations()
+double run_rwlock_operations(double M_member, double M_insert, double M_delete, int PNC_THREAD_COUNT)
 {
     init_rwlock(); // Initialize read-write lock linked list
     pthread_t threads[PNC_THREAD_COUNT];
@@ -161,7 +159,7 @@ double run_rwlock_operations()
     int *initial_values = malloc(N * sizeof(int)); // Array to hold initial values
     
     generate_unique_values(values, initial_values);
-    generate_operation_order(operations);
+    generate_operation_order(operations, M_member, M_insert, M_delete);
 
     // Prepopulate the linked list with N elements
     for (int i = 0; i < N; i++)
@@ -199,14 +197,14 @@ double run_rwlock_operations()
 }
 
 // Function to run linked list operations serially
-double run_serial_operations()
+double run_serial_operations(double M_member, double M_insert, double M_delete)
 {
     int *operations = malloc(M * sizeof(int)); // Array to hold all operations (0 = member, 1 = insert, 2 = delete)
     int *values = malloc(M * sizeof(int));     // Array to hold random values
     int *initial_values = malloc(N * sizeof(int)); // Array to hold initial values
 
     generate_unique_values(values, initial_values);
-    generate_operation_order(operations);
+    generate_operation_order(operations, M_member, M_insert, M_delete);
 
     for (int i = 0; i < N; i++)
     {
@@ -273,12 +271,12 @@ void generate_unique_values(int *values, int *initial_values)
     }
 }
 
-void generate_operation_order(int *operations)
+void generate_operation_order(int *operations, double M_member, double M_insert, double M_delete)
 {
     // Calculate number of operations for each type
-    int member_ops = M * M_member; // 99% of the total operations
-    int insert_ops = M * M_insert; // 0.5% of the total operations
-    int delete_ops = M * M_delete; // 0.5% of the total operations
+    int member_ops = M * M_member;
+    int insert_ops = M * M_insert;
+    int delete_ops = M * M_delete;
 
     // Fill array with exact number of each operation
     int index = 0;
@@ -301,20 +299,48 @@ void generate_operation_order(int *operations)
     }
 }
 
+
+double calculate_standard_deviation(double times[], int sample_size, double mean)
+{
+    double sum_squared_diff = 0.0;
+    for (int i = 0; i < sample_size; i++)
+    {
+        double diff = times[i] - mean;
+        sum_squared_diff += diff * diff;
+    }
+    return sqrt(sum_squared_diff / sample_size);
+}
+
+
 int main(int argc, char *argv[])
 {
+    if (argc < 5) {
+        printf("Usage: %s <M_member> <M_insert> <M_delete> <THREAD_COUNT>\n", argv[0]);
+        return 1;
+    }
+
+    double M_member = atof(argv[1]);
+    double M_insert = atof(argv[2]);
+    double M_delete = atof(argv[3]);
+    int PNC_THREAD_COUNT = atoi(argv[4]);
+
     srand(time(NULL));
+
+    double serial_times[SAMPLE_SIZE];
+    double mutex_times[SAMPLE_SIZE];
+    double rwlock_times[SAMPLE_SIZE];
+    double temp = 0.0;
 
     double total_serial_time = 0.0;
     double total_mutex_time = 0.0;
     double total_rwlock_time = 0.0;
-    double temp = 0.0;
 
     // Serial operations loop
     printf("Running Serial operations...\n");
     for (int i = 0; i < SAMPLE_SIZE; i++)
     {
-        temp = run_serial_operations();
+        temp = run_serial_operations(M_member, M_insert, M_delete);
+        serial_times[i] = temp;
         total_serial_time += temp;
         printf("\rProgress: %d/%d -- %.6f seconds", i + 1, SAMPLE_SIZE, temp);
         fflush(stdout); // Force the output to be updated
@@ -325,7 +351,8 @@ int main(int argc, char *argv[])
     printf("Running Mutex operations...\n");
     for (int i = 0; i < SAMPLE_SIZE; i++)
     {
-        temp = run_mutex_operations();
+        temp = run_mutex_operations(M_member, M_insert, M_delete, PNC_THREAD_COUNT);
+        mutex_times[i] = temp;
         total_mutex_time += temp;
         printf("\rProgress: %d/%d -- %.6f seconds", i + 1, SAMPLE_SIZE, temp);
         fflush(stdout); // Force the output to be updated
@@ -336,21 +363,33 @@ int main(int argc, char *argv[])
     printf("Running Read-Write Lock operations...\n");
     for (int i = 0; i < SAMPLE_SIZE; i++)
     {
-        temp = run_rwlock_operations();
+        temp = run_rwlock_operations(M_member, M_insert, M_delete, PNC_THREAD_COUNT);
+        rwlock_times[i] = temp;
         total_rwlock_time += temp;
         printf("\rProgress: %d/%d -- %.6f seconds", i + 1, SAMPLE_SIZE, temp);
         fflush(stdout); // Force the output to be updated
     }
     printf("\n");
 
-    // Calculate and print average times
+    // Calculate average times
     double avg_serial_time = total_serial_time / SAMPLE_SIZE;
     double avg_mutex_time = total_mutex_time / SAMPLE_SIZE;
     double avg_rwlock_time = total_rwlock_time / SAMPLE_SIZE;
 
+    // Calculate standard deviations
+    double stddev_serial_time = calculate_standard_deviation(serial_times, SAMPLE_SIZE, avg_serial_time);
+    double stddev_mutex_time = calculate_standard_deviation(mutex_times, SAMPLE_SIZE, avg_mutex_time);
+    double stddev_rwlock_time = calculate_standard_deviation(rwlock_times, SAMPLE_SIZE, avg_rwlock_time);
+
+    // Print results
     printf("Average time taken for Serial operations: %.6f seconds\n", avg_serial_time);
+    printf("Standard deviation for Serial operations: %.6f seconds\n", stddev_serial_time);
+
     printf("Average time taken for Mutex operations: %.6f seconds\n", avg_mutex_time);
+    printf("Standard deviation for Mutex operations: %.6f seconds\n", stddev_mutex_time);
+
     printf("Average time taken for Read-Write Lock operations: %.6f seconds\n", avg_rwlock_time);
+    printf("Standard deviation for Read-Write Lock operations: %.6f seconds\n", stddev_rwlock_time);
 
     return 0;
 }
