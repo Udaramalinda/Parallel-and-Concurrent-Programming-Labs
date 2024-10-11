@@ -8,7 +8,7 @@
 
 #define N 1000              // Initial size of the linked list
 #define M 10000             // Number of operations
-#define SAMPLE_SIZE 40      // Number of times each experiment is run
+#define SAMPLE_SIZE 385      // Number of times each experiment is run
 
 // TODO: prevent duplication of random numbers in the linked list at any given point of time
 
