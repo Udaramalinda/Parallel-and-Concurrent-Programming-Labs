@@ -73,7 +73,7 @@ public class Simulation {
 
         // Summary Section
         System.out.println("\nSummary\n");
-        System.out.println("Total passengers: " + (101 - noOfPassengers) + ", Total buses: " + noOfBuses);
+        System.out.println("Total passengers: " + noOfPassengers + ", Total buses: " + noOfBuses);
         System.out.println("Total Simulated time: " + currentTime + "\n");
 
         for (Bus bus : allBuses) {

@@ -114,7 +114,7 @@ public class BusStop {
 
                 if (waitingPassengers.isEmpty()) {
                     bus.setDeparting(true);
-                    System.out.println(bus + " left bus stop with " + bus.getPassengers().size() + " passengers.");
+                    System.out.println(bus + " left bus stop with " + bus.getPassengers().size() + " passengers.\n");
                     return;
                 }
 

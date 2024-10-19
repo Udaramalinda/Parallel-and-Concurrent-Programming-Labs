@@ -18,12 +18,14 @@ make runjava
 ```
 
 Note that the makefile uses the default parameters of (for convenience with quick trial runs):
-- 101 passengers
-- bus capacity of 10
+- 300 passengers
+- bus capacity of 50
 - passenger arrival mean time interval of 0.2
-- bus arrival mean time interval of 2.0 
+- bus arrival mean time interval of 5.0 
 
 To change these parameters, you can modify the Makefile.
+
+The simulation output will be displayed "output.java.txt" file. in the directory.
 
 ## Running the Python Simulation
 

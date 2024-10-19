@@ -2,7 +2,7 @@ build:
 	javac ./*.java
 
 runjava: build
-	java Simulation 101 10 0.2 2.0 > output.java.txt
+	java Simulation 300 50 0.2 5.0 > output.java.txt
 
 runpython:
 	python3 -m main > output.py.txt
