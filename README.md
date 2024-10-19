@@ -1,0 +1,2 @@
+### Parallel and Concurrent Programming Lab Assignments
+This repository contains the lab assignments for the Parallel and Concurrent Programming module. The labs cover various concepts such as thread management, synchronization with mutexes and semaphores, deadlock prevention, multithreading with shared memory, and parallel algorithms. Each lab is designed to provide hands-on experience in writing efficient and safe concurrent programs.
